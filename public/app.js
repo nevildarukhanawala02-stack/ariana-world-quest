@@ -215,8 +215,9 @@ function chrome(inQuest) {
 function setSubject(sb) {
   SUBJECT = sb || "english";
   document.documentElement.dataset.subject = sb || "";
-  $("#owl").hidden = SUBJECT === "maths" && !!sb;
-  $("#pig").hidden = !(SUBJECT === "maths" && !!sb);
+  const pig = SUBJECT === "maths" && !!sb;
+  $("#owl").toggleAttribute("hidden", pig);          // SVG elements have no .hidden property, so use the attribute
+  $("#pig").toggleAttribute("hidden", !pig);
   $(".brand").textContent = sb ? META[sb].name : "Ariana’s Quests";
 }
 function nextBtn(label, fn) {

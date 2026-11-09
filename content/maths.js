@@ -106,7 +106,7 @@ const quests = [
     skills: ["gstamt", "gst", "bill2", "est"],
     warm: [["14 × 5", "70"], ["96 ÷ 8", "12"], ["129 + 71", "200"], ["500 − 175", "325"]],
     create: { type: "budget", prompt: "Your shop has ₹500 for new stock. Tap items to fill the basket as close to ₹500 as you can, without going over.", target: 500,
-      items: [{ n: "Pen box", e: "🖊️", p: 120 }, { n: "Notebook set", e: "📓", p: 80 }, { n: "Calculator", e: "🧮", p: 250 }, { n: "Stapler", e: "📎", p: 90 }, { n: "Folder", e: "📁", p: 45 }, { n: "Tape", e: "🩹", p: 35 }] }
+      items: [{ n: "Pen box", e: "🖊️", p: 120 }, { n: "Notebook set", e: "📓", p: 80 }, { n: "Calculator", e: "🧮", p: 250 }, { n: "Stapler", e: "📎", p: 90 }, { n: "Folder", e: "📁", p: 45 }, { n: "Tape", e: "🖇️", p: 35 }] }
   },
   {
     id: 8, kind: "maths", title: "Budget Boss", emoji: "👛", theme: "Money Maths",

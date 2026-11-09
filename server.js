@@ -139,7 +139,7 @@ const RANKS = {
     { at: 30, icon: "👑", title: "Word Legend" }
   ],
   maths: [
-    { at: 0,  icon: "🪙", title: "Coin Collector" },
+    { at: 0,  icon: "🐷", title: "Coin Collector" },
     { at: 4,  icon: "🛍️", title: "Shopkeeper" },
     { at: 9,  icon: "📦", title: "Trader" },
     { at: 15, icon: "💼", title: "Manager" },
