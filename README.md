@@ -8,6 +8,14 @@ Two game-like 15-minute daily subjects behind one home screen (she picks whichev
 Each quest follows the same loop: warm-up, learn, games, make-it-yours, report. Words and skills come back for review
 (bronze → silver → gold). The two subjects are completely separate: each has its own quests, review boxes, stars, badges, ranks and daily streak, and neither unlocks the other.
 
+## How the app adapts to her
+The path itself is fixed: finishing a quest always unlocks the next one, and nothing is ever locked behind a score.
+Around the path the app adapts:
+- **Review:** words and skills she gets wrong come back tomorrow; right ones come back after 3, 7, 14 and 30 days (bronze → silver → gold).
+- **Practice time:** when three or more words or skills are shaky, an optional 10-minute practice quest appears on that subject’s home screen, built only from those.
+- **Maths difficulty:** each Money Maths skill has a level from 1 to 3. Two clean days in a row raise it (bigger numbers, more realistic amounts); a rough day lowers it. Replays on the same day can’t change levels.
+- **Parent area:** shows her tricky words and skills, and a **Use her tricky words** button that pre-fills the next English quest request.
+
 ## Run it on your computer
 ```
 npm install

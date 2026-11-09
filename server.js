@@ -100,9 +100,10 @@ const SKILL = {
   builder: { icon: "🧩", name: "Sentence Builder", desc: "Unscramble sentences" },
   calc:    { icon: "🧮", name: "Number Cruncher",  desc: "Type in every answer right first try in a quest" },
   shopkeeper: { icon: "🛍️", name: "Shopkeeper",     desc: "Finish a shop challenge" },
-  ace:     { icon: "💎", name: "Perfect Quest",    desc: "Finish a quest with no wrong answers" }
+  ace:     { icon: "💎", name: "Perfect Quest",    desc: "Finish a quest with no wrong answers" },
+  practice:{ icon: "💪", name: "Practice Pro",     desc: "Finish a practice quest on your tricky ones" }
 };
-const SKILL_FOR = { english: ["warm", "drag", "eyes", "sound", "story", "builder", "ace"], maths: ["warm", "drag", "eyes", "calc", "shopkeeper", "ace"] };
+const SKILL_FOR = { english: ["warm", "drag", "eyes", "sound", "story", "builder", "ace", "practice"], maths: ["warm", "drag", "eyes", "calc", "shopkeeper", "ace", "practice"] };
 const STREAKS = {
   streak3:  { icon: "🔥", name: "3-Day Streak",  desc: "Play 3 days in a row" },
   streak7:  { icon: "⚡", name: "7-Day Streak",  desc: "Play 7 days in a row" },
@@ -183,7 +184,7 @@ function overview(st, today) {
   SUBJECTS.forEach(sb => {
     const qs = questsOf(st, sb), units = unitsOf(st, sb), o = bag(st, sb);
     const next = qs.find(q => q.id >= o.currentQuest) || null;
-    const done = new Set(st.completed.filter(c => recSubj(c) === sb).map(c => c.quest));
+    const done = new Set(st.completed.filter(c => recSubj(c) === sb && !c.practice).map(c => c.quest));
     out[sb] = {
       next: next && { id: next.id, title: next.title, kind: next.kind, emoji: next.emoji },
       total: qs.length, done: done.size,
@@ -199,9 +200,9 @@ function publicState(st, today, sb) {
   const quests = questsOf(st, sb);
   const meta = unitMeta(st, sb);
   const o = bag(st, sb);
-  const done = new Set(st.completed.filter(c => recSubj(c) === sb).map(c => c.quest));
+  const done = new Set(st.completed.filter(c => recSubj(c) === sb && !c.practice).map(c => c.quest));
   const words = Object.entries(unitsOf(st, sb)).map(([w, v]) => ({
-    w, label: (meta[w] && meta[w].label) || w, box: v.box, medal: medal(v.box), due: v.due, isDue: v.due <= today,
+    w, label: (meta[w] && meta[w].label) || w, box: v.box, lvl: v.lvl || 1, medal: medal(v.box), due: v.due, isDue: v.due <= today,
     seen: v.seen, right: v.right, wrong: v.wrong,
     mean: meta[w] && meta[w].mean, say: meta[w] && meta[w].say, emoji: meta[w] && meta[w].emoji
   }));
@@ -220,6 +221,7 @@ function publicState(st, today, sb) {
     next: next && { id: next.id, title: next.title, kind: next.kind, emoji: next.emoji },
     currentQuest: o.currentQuest,
     words, dueWords,
+    practice: (() => { const p = buildPractice(st, sb); return p ? { available: true, count: shakyOf(unitsOf(st, sb)).length, labels: sb === "maths" ? p.skills.map(id => M.SKILLS[id].name) : p.words.map(w => w.w) } : { available: false, count: 0, labels: [] }; })(),
     overview: overview(st, today),
     sessionsToday: st.completed.filter(c => c.date === today && recSubj(c) === sb).length,
     coach: { enabled: AI.enabled(), left: Math.max(0, COACH_LIMIT - used) }
@@ -242,20 +244,59 @@ app.get("/api/quest/:id", wrap(async (req, res) => {
   res.json(sb === "maths" ? M.withUnits(q) : q);
 }));
 
+// Review boxes decide WHEN a word or skill comes back. For maths skills, "lvl" (1-3) decides how hard the numbers are:
+// two clean days in a row move it up, a really shaky day moves it down. Both only move once per day, so replays can't farm them.
 function applyWord(map, w, r, today, changed) {
   const right = num(r && r.right, 50), wrong = num(r && r.wrong, 50);
   let rec = map[w];
   const isNew = !rec;
-  if (isNew) rec = map[w] = { box: wrong === 0 ? 2 : 1, due: "", seen: 0, right: 0, wrong: 0, first: today, last: "" };
-  else if (rec.last !== today) {                      // box moves at most once per day, so replaying can't farm gold
+  if (isNew) rec = map[w] = { box: wrong === 0 ? 2 : 1, lvl: 1, ok: wrong === 0 && right > 0 ? 1 : 0, due: "", seen: 0, right: 0, wrong: 0, first: today, last: "" };
+  else if (rec.last !== today) {
     if (wrong === 0 && right > 0) rec.box = Math.min(5, rec.box + 1);
     else if (wrong >= 2) rec.box = 1;
+    rec.lvl = rec.lvl || 1;
+    if (wrong === 0 && right > 0) { rec.ok = (rec.ok || 0) + 1; if (rec.ok >= 2 && rec.lvl < 3) { rec.lvl++; rec.ok = 0; } }
+    else if (wrong >= 2) { rec.lvl = Math.max(1, rec.lvl - 1); rec.ok = 0; }
+    else if (wrong > 0) rec.ok = 0;
   }
   rec.seen++; rec.right += right; rec.wrong += wrong;
   rec.last = today;
   rec.due = addDays(today, INTERVALS[rec.box]);
-  changed.push({ w, box: rec.box, medal: medal(rec.box), isNew });
+  changed.push({ w, box: rec.box, medal: medal(rec.box), lvl: rec.lvl || 1, isNew });
 }
+
+/* ---------- practice quest: a short quest built only from her tricky words or skills ---------- */
+const shakyOf = units => Object.entries(units).filter(([, v]) => v.box === 1).sort((a, b) => b[1].wrong - a[1].wrong || (a[1].due < b[1].due ? -1 : 1));
+function buildPractice(st, sb) {
+  const units = unitsOf(st, sb), all = Object.entries(units), shaky = shakyOf(units);
+  if (shaky.length < 3 || all.length < 4) return null;
+  const chosen = shaky.slice(0, 4).map(e => e[0]);
+  if (chosen.length < 4) {                         // top up with the next-weakest ones
+    all.filter(([w]) => !chosen.includes(w)).sort((a, b) => a[1].box - b[1].box || b[1].wrong - a[1].wrong).slice(0, 4 - chosen.length).forEach(e => chosen.push(e[0]));
+  }
+  const quests = questsOf(st, sb);
+  if (sb === "maths") {
+    const src = quests.find(q => q.skills.includes(chosen[0])) || quests[0];
+    return M.withUnits({ id: 0, kind: "maths", practice: true, title: "Practice Time", emoji: "🎯", theme: "Money Maths",
+      intro: "Let’s give some tricky skills another go. You’ve got this!", badge: { icon: "💪", name: "Practice Pro" },
+      skills: chosen, warm: src.warm, create: src.create });
+  }
+  const words = [];
+  let src = null;
+  quests.forEach(q => { if (q.kind === "words") q.words.forEach(w => { if (chosen.includes(w.w)) { words.push(w); if (!src || w.w === chosen[0]) src = q; } }); });
+  words.sort((a, b) => chosen.indexOf(a.w) - chosen.indexOf(b.w));
+  if (words.length < 4) return null;
+  return { id: 0, kind: "words", practice: true, title: "Practice Time", emoji: "🎯", theme: "Word Quest",
+    intro: "Let’s give some tricky words another go. You’ve got this!", badge: { icon: "💪", name: "Practice Pro" },
+    warm: (src || quests[0]).warm, say: [0, 1], words };
+}
+
+app.get("/api/practice", wrap(async (req, res) => {
+  const st = await store.read();
+  const q = buildPractice(st, subj(req.query.subject));
+  if (!q) throw httpErr(404, "Nothing to practise right now");
+  res.json(q);
+}));
 
 app.post("/api/session", wrap(async (req, res) => {
   const b = req.body || {};
@@ -264,7 +305,8 @@ app.post("/api/session", wrap(async (req, res) => {
   const out = await store.update(st => {
     const sb = subj(b.subject);
     const quests = questsOf(st, sb);
-    const quest = quests.find(q => q.id === +b.quest);
+    const practice = !!b.practice;
+    const quest = practice ? { id: 0, kind: "practice" } : quests.find(q => q.id === +b.quest);
     if (!quest) throw httpErr(400, "Unknown quest");
     if (sid) { const prev = st.completed.find(c => c.sid === sid); if (prev) return prev.result; }
     const units = unitsOf(st, sb);
@@ -273,6 +315,13 @@ app.post("/api/session", wrap(async (req, res) => {
     const changed = [];
     const wordRes = b.wordRes && typeof b.wordRes === "object" ? b.wordRes : {};
     const reviewRes = b.reviewRes && typeof b.reviewRes === "object" ? b.reviewRes : {};
+    if (practice) {
+      new Set(Object.keys(wordRes).concat(Object.keys(reviewRes))).forEach(k => {
+        if (!units[k]) return;
+        const x = wordRes[k] || {}, y = reviewRes[k] || {};
+        applyWord(units, k, { right: num(x.right, 50) + num(y.right, 50), wrong: num(x.wrong, 50) + num(y.wrong, 50) }, today, changed);
+      });
+    }
     if (quest.kind === "words") quest.words.forEach(w => applyWord(units, w.w, wordRes[w.w] || { right: 0, wrong: 0 }, today, changed));
     if (quest.kind === "maths") quest.skills.forEach(id => applyWord(units, id, wordRes[id] || { right: 0, wrong: 0 }, today, changed));
     Object.keys(reviewRes).forEach(w => {
@@ -286,7 +335,7 @@ app.post("/api/session", wrap(async (req, res) => {
     const newBadges = [];
     const give = id => { if (!o.badges.includes(id)) { o.badges.push(id); newBadges.push(id); } };
     (Array.isArray(b.badges) ? b.badges : []).forEach(id => { if (SKILL_FOR[sb].includes(id) && id !== "ace") give(id); });
-    give(qBadgeId(sb, quest.id));
+    if (practice) give("practice"); else give(qBadgeId(sb, quest.id));
     if (wrong === 0) give("ace");
     [[3, "streak3"], [7, "streak7"], [14, "streak14"], [30, "streak30"]].forEach(([n, id]) => { if (o.streak.count >= n) give(id); });
     const nu = Object.keys(units).length;
@@ -298,7 +347,7 @@ app.post("/api/session", wrap(async (req, res) => {
     });
     if (st.sentences.length > 200) st.sentences = st.sentences.slice(-200);
 
-    if (!b.replay && quest.id >= o.currentQuest) o.currentQuest = quest.id + 1;
+    if (!practice && !b.replay && quest.id >= o.currentQuest) o.currentQuest = quest.id + 1;
 
     const ratings = {};
     if (b.ratings && typeof b.ratings === "object") Object.keys(b.ratings).slice(0, 8).forEach(k => { ratings[clip(k, 20)] = clip(b.ratings[k], 8); });
@@ -306,7 +355,7 @@ app.post("/api/session", wrap(async (req, res) => {
     try { const s = JSON.stringify(b.log || {}); if (s.length < 3000) log = JSON.parse(s); } catch (e) { /* ignore */ }
 
     const result = { newBadges, changed, stars: o.stars, streak: streakView(o, today), rank: rankFor(o.badges.length, sb) };
-    st.completed.push({ sid, subject: sb, quest: quest.id, date: today, ts: Date.now(), seconds, stars, hints, wrong, replay: !!b.replay, ratings, log, result });
+    st.completed.push({ sid, subject: sb, practice, quest: quest.id, date: today, ts: Date.now(), seconds, stars, hints, wrong, replay: !!b.replay, ratings, log, result });
     if (st.completed.length > 400) st.completed = st.completed.slice(-400);
     return result;
   });
@@ -350,8 +399,8 @@ app.get("/api/parent", parentOnly, wrap(async (req, res) => {
   const quests = C.all(st);
   const today = isoToday();
   const eMeta = unitMeta(st, "english"), mMeta = unitMeta(st, "maths");
-  const qTitle = (sb, id) => { const q = questsOf(st, sb).find(x => x.id === id); return q ? q.title : "Quest " + id; };
-  const listUnits = (map, meta, sb) => Object.entries(map).map(([w, v]) => ({ subject: sb, w, label: (meta[w] && meta[w].label) || w, box: v.box, medal: medal(v.box), seen: v.seen, right: v.right, wrong: v.wrong, due: v.due, mean: meta[w] && meta[w].mean }));
+  const qTitle = (sb, id) => { if (id === 0) return "Practice Time"; const q = questsOf(st, sb).find(x => x.id === id); return q ? q.title : "Quest " + id; };
+  const listUnits = (map, meta, sb) => Object.entries(map).map(([w, v]) => ({ subject: sb, w, label: (meta[w] && meta[w].label) || w, box: v.box, lvl: v.lvl || 1, medal: medal(v.box), seen: v.seen, right: v.right, wrong: v.wrong, due: v.due, mean: meta[w] && meta[w].mean }));
   const words = listUnits(st.words, eMeta, "english").concat(listUnits(st.maths.units, mMeta, "maths"));
   const sessions = st.completed.slice(-30).reverse().map(c => ({ subject: recSubj(c), date: c.date, quest: c.quest, title: qTitle(recSubj(c), c.quest), seconds: c.seconds, stars: c.stars, hints: c.hints, wrong: c.wrong, ratings: c.ratings, replay: c.replay }));
   const real = st.completed.filter(c => !c.replay);
@@ -361,6 +410,10 @@ app.get("/api/parent", parentOnly, wrap(async (req, res) => {
     sessionsTotal: st.completed.length,
     avgMinutes: real.length ? Math.round(real.reduce((a, c) => a + c.seconds, 0) / real.length / 60 * 10) / 10 : 0,
     words, sessions,
+    weak: {
+      english: shakyOf(st.words).slice(0, 6).map(([w]) => w),
+      maths: shakyOf(st.maths.units).slice(0, 6).map(([w]) => (M.SKILLS[w] ? M.SKILLS[w].name : w))
+    },
     sentences: st.sentences.slice(-30).reverse(),
     coachLog: st.coach.log.slice(-30).reverse(),
     quests: quests.map(q => ({ subject: "english", id: q.id, title: q.title, kind: q.kind, generated: (st.generated || []).some(g => g.id === q.id), done: st.completed.some(c => recSubj(c) === "english" && c.quest === q.id), words: q.words ? q.words.map(w => w.w) : undefined }))
