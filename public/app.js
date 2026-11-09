@@ -26,6 +26,8 @@ const META = {
   maths:   { name: "Money Maths", coach: "Penny", emoji: "💰", quest: "Maths quest" }
 };
 const M = window.MATHS;
+// how hard Money Maths numbers are for each skill (1-3). The server raises it after clean days and lowers it after a rough one.
+const lvlOf = id => { const w = ((APP.state && APP.state.words) || []).filter(x => x.w === id)[0]; return (w && w.lvl) || 1; };
 let sound = true;
 let ACCESS = lsGet("wq_access") || "";
 
@@ -292,13 +294,16 @@ function home() {
   } else {
     main = '<div class="card center"><div class="scene" aria-hidden="true">🎉</div><h2>You finished every quest!</h2><p class="tiny">Ask Mum or Dad to add new ones. Meanwhile, replay your favourites from the map.</p><button class="btn wide" id="map2">Open the quest map</button></div>';
   }
-  stage.innerHTML = main +
+  const prac = st.practice && st.practice.available
+    ? '<div class="card center"><div class="small">Optional · about 10 minutes</div><h3>🎯 Practice time</h3><p class="tiny">Some ' + (SUBJECT === "maths" ? "skills" : "words") + ' need another go: ' + esc(st.practice.labels.join(", ")) + '.</p><button class="btn alt wide" id="prac">Practise the tricky ones</button></div>' : "";
+  stage.innerHTML = main + prac +
     '<div class="card"><div class="stats"><div><b>⭐ ' + st.stars + '</b>stars</div><div><b>🔥 ' + st.streak.count + '</b>day streak</div><div><b>' + esc(st.rank.icon) + '</b>' + esc(st.rank.title) + '</div></div>' +
     (st.rank.next ? '<p class="tiny" style="margin:10px 0 0">' + st.rank.next.need + " more badge" + (st.rank.next.need > 1 ? "s" : "") + " to become a " + esc(st.rank.next.title) + "</p>" : "") + '</div>' +
     '<div class="menu"><button id="mMap"><span>🗺️</span>Quest map</button><button id="mVault"><span>' + (SUBJECT === "maths" ? "🧮" : "📚") + '</span>' + (SUBJECT === "maths" ? "Skill vault" : "Word vault") + '</button><button id="mBadges"><span>🏅</span>Badges</button></div>' +
     '<p class="tiny center"><button class="mini" id="toTop">← Switch subject</button></p>';
   if (n) $("#go").onclick = () => startQuest(n.id, false);
   else $("#map2").onclick = questMap;
+  if ($("#prac")) $("#prac").onclick = startPractice;
   $("#mMap").onclick = questMap; $("#mVault").onclick = vault; $("#mBadges").onclick = () => badgesScreen(home);
   $("#toTop").onclick = top;
 }
@@ -332,7 +337,7 @@ function vault() {
   const words = st.words.slice().sort((a, b) => b.box - a.box || (a.label < b.label ? -1 : 1));
   const body = words.length
     ? '<p class="tiny">' + (maths ? "Skills" : "Words") + ' turn silver and gold when you get them right in your warm-ups. Tap a card to hear it.</p><div class="vgrid">' +
-      words.map(w => '<button class="vcard ' + w.medal + '" data-w="' + esc(w.w) + '"><b>' + esc(w.emoji || "") + " " + esc(w.label) + "</b><span>" + esc(w.mean || "") + "</span><span>" + med[w.medal] + "</span></button>").join("") + "</div>"
+      words.map(w => '<button class="vcard ' + w.medal + '" data-w="' + esc(w.w) + '"><b>' + esc(w.emoji || "") + " " + esc(w.label) + "</b><span>" + esc(w.mean || "") + "</span><span>" + med[w.medal] + (maths ? " · Level " + (w.lvl || 1) : "") + "</span></button>").join("") + "</div>"
     : '<div class="card center"><div class="scene">' + (maths ? "🧮" : "📚") + '</div><p>Your vault is empty. Finish a quest to collect your first ' + (maths ? "skills" : "words") + '!</p></div>';
   subScreen((maths ? "Skill vault (" : "Word vault (") + words.length + ")", body, words.length ? "Look at everything you’ve learned! Tap one to hear it." : "Your vault is waiting for its first one.");
   [].forEach.call(stage.querySelectorAll(".vcard"), b => {
@@ -352,9 +357,17 @@ function badgesScreen(back) {
 /* =====================================================================
    QUEST RUNNER
    ===================================================================== */
+async function startPractice() {
+  let q;
+  try { q = await api("/api/practice?subject=" + SUBJECT); } catch (e) { if (e.auth) { gate(); return; } toast("Nothing to practise right now."); return; }
+  launch(q, false);
+}
 async function startQuest(id, replay) {
   let q;
   try { q = await api("/api/quest/" + id + "?subject=" + SUBJECT); } catch (e) { if (e.auth) { gate(); return; } toast("Could not load the quest. Try again."); return; }
+  launch(q, replay);
+}
+function launch(q, replay) {
   endSession();
   S = { q, subject: SUBJECT, replay: !!replay, sid: Math.random().toString(36).slice(2) + Date.now().toString(36), t0: Date.now(), timer: null, elapsed: 0,
         stars: 0, hints: 0, wrong: 0, badges: [], created: [], rate: {}, log: {}, wordRes: {}, reviewRes: {}, ctx: "", now: "", phase: -1 };
@@ -378,7 +391,7 @@ function warm() {
   due.forEach(w => {
     if (maths) {
       let pr, t = 0;
-      do { pr = M.pair(w.w); t++; } while (t < 8 && pairs.some(p => p.b === pr.b));
+      do { pr = M.pair(w.w, lvlOf(w.w)); t++; } while (t < 8 && pairs.some(p => p.b === pr.b));
       pairs.push({ k: w.w, a: pr.a, b: pr.b, bad: 0 });
     } else pairs.push({ k: w.w, a: w.w, b: w.mean, bad: 0 });
   });
@@ -467,7 +480,7 @@ function meetGrammar() {
 
 /* ---------- 3. play ---------- */
 function play() {
-  const games = S.q.kind === "grammar" ? [gGaps, gSpot, gSayLines] : S.q.kind === "maths" ? [mDrag, mQuiz, mSpot, mCalc] : [gDrag, gMean, gSilly, gSayWords];
+  const games = S.q.kind === "grammar" ? [gGaps, gSpot, gSayLines] : S.q.kind === "maths" ? [mDrag, mQuiz, mSpot, mCalc] : S.q.practice ? [gMean, gSilly, gSayWords] : [gDrag, gMean, gSilly, gSayWords];
   let i = 0;
   const nxt = () => { if (i >= games.length) { go(3); return; } const n = ++i; games[n - 1](nxt, n, games.length); };
   nxt();
@@ -576,7 +589,7 @@ function mProblems(ids) {
   const used = {}, out = [];
   ids.forEach(id => {
     let p, t = 0, a;
-    do { p = M.gen(id); a = M.fmt(p.ans, p.unit); t++; } while (t < 12 && used[a]);
+    do { p = M.gen(id, lvlOf(id)); a = M.fmt(p.ans, p.unit); t++; } while (t < 12 && used[a]);
     used[a] = 1; out.push(Object.assign({ id, ansS: a }, p));
   });
   return out;
@@ -590,7 +603,7 @@ function mDrag(done, n, total) {
 function mQuiz(done, n, total) {
   S.ctx = "Game: picking the right answer to a business problem";
   const items = shuffle(S.q.skills).slice(0, 3).map(id => {
-    const p = M.gen(id), o = M.options(p);
+    const p = M.gen(id, lvlOf(id)), o = M.options(p);
     return { q: p.q, opts: o.opts, ans: o.ans, why: "Yes! " + p.why, w: id, hints: p.hint, remind: p.hint[0] };
   });
   quiz("Game " + n + " of " + total + " · Pick the answer", items, "mean", done);
@@ -598,7 +611,7 @@ function mQuiz(done, n, total) {
 function mSpot(done, n, total) {
   S.ctx = "Game: spotting the calculation that is wrong";
   const items = shuffle(S.q.skills).slice(0, 2).map(id => {
-    const sp = M.spot(id);
+    const sp = M.spot(id, lvlOf(id));
     return { q: "One of these calculations is wrong. Which one?", opts: sp.opts, ans: sp.ans, why: "Spotted it! " + sp.why, w: id, hints: ["Work each one out yourself and compare."].concat(sp.hint), remind: "Work each one out yourself and compare." };
   });
   quiz("Game " + n + " of " + total + " · Spot the mistake", items, "spot", done);
@@ -609,7 +622,7 @@ function mCalc(done, n, total) {
   S.log.calc = { first: 0, total: ids.length, wrong: 0 };
   let i = 0;
   function show() {
-    const id = ids[i], p = M.gen(id); let val = "", tries = 0, fin = false;
+    const id = ids[i], p = M.gen(id, lvlOf(id)); let val = "", tries = 0, fin = false;
     if (lsGet("wq_debug") === "1") window.__wqAns = p.ans;
     const pre = p.unit === "₹" ? "₹ " : "", suf = p.unit === "%" ? " %" : (p.unit && p.unit !== "₹" ? " " + p.unit : "");
     stage.innerHTML = '<div class="card"><div class="small">Game ' + n + " of " + total + " · Crunch the number · " + (i + 1) + " of " + ids.length + "</div><h3>" + esc(p.q) + '</h3><div class="answer" id="disp" aria-live="polite"></div><div class="pad" id="pad">' +
@@ -882,7 +895,7 @@ async function report() {
   clearInterval(S.timer); tick();
   S.ctx = "Quest report";
   stage.innerHTML = '<div class="card center"><div class="medal">⏳</div><p>Saving your quest…</p></div>';
-  const payload = { sid: S.sid, subject: S.subject, quest: S.q.id, today: today(), replay: S.replay, seconds: S.elapsed, stars: S.stars, hints: S.hints, wrong: S.wrong,
+  const payload = { sid: S.sid, subject: S.subject, practice: !!S.q.practice, quest: S.q.id, today: today(), replay: S.replay, seconds: S.elapsed, stars: S.stars, hints: S.hints, wrong: S.wrong,
                     badges: S.badges, ratings: S.rate, log: S.log, created: S.created, wordRes: S.wordRes, reviewRes: S.reviewRes };
   let res = null, synced = true;
   try { res = await api("/api/session", { method: "POST", body: JSON.stringify(payload) }); }
@@ -890,7 +903,8 @@ async function report() {
   try { await refresh(); } catch (e) { /* keep old state */ }
   const st = APP.state, cat = st.badgeCatalog;
   const maths = S.subject === "maths";
-  const qb = cat[(maths ? "mquest:" : "quest:") + S.q.id] || { icon: "🏅", name: "Quest complete" };
+  const prac = !!S.q.practice;
+  const qb = prac ? (cat.practice || { icon: "💪", name: "Practice Pro" }) : (cat[(maths ? "mquest:" : "quest:") + S.q.id] || { icon: "🏅", name: "Quest complete" });
   const newB = res ? res.newBadges : S.badges;
   const med = { bronze: "🥉", silver: "🥈", gold: "🥇" };
   const RATE = maths
@@ -902,13 +916,13 @@ async function report() {
   const changed = res ? res.changed : [];
 
   stage.innerHTML =
-    '<div class="card hero"><div class="medal">' + esc(qb.icon) + '</div><h2>Quest complete!</h2><p>You earned the <b>' + esc(qb.name) + '</b> badge.</p>' +
+    '<div class="card hero"><div class="medal">' + esc(qb.icon) + '</div><h2>' + (prac ? "Practice complete!" : "Quest complete!") + '</h2><p>' + (prac ? "Those tricky ones are getting stronger." + (newB.indexOf("practice") > -1 ? " You earned the <b>Practice Pro</b> badge." : "") : "You earned the <b>" + esc(qb.name) + "</b> badge.") + '</p>' +
     (synced ? "" : '<p class="tiny">Saved on this device. It will sync when you’re back online.</p>') + '</div>' +
     '<div class="card"><div class="stats"><div><b>' + S.stars + '</b>stars</div><div><b>' + fmt(S.elapsed) + '</b>time</div><div><b>🔥 ' + st.streak.count + '</b>day streak</div></div></div>' +
     (newB.length ? '<div class="card"><h3>New badges</h3><div class="shelf">' + newB.map(id => "<span>" + esc((cat[id] || { icon: "🏅" }).icon) + " " + esc((cat[id] || { name: id }).name) + "</span>").join("") + "</div></div>" : "") +
     (words.length ? '<div class="card"><h3>Today you learned</h3><div class="vgrid">' + words.map(x => {
       const c = changed.filter(z => z.w === x.id)[0];
-      return '<div class="vcard ' + (c ? c.medal : "bronze") + '"><b>' + esc(x.emoji) + " " + esc(x.label) + "</b><span>" + esc(x.mean) + "</span><span>" + (c ? med[c.medal] + (c.isNew ? " · new in your vault" : "") : "🥉") + "</span></div>";
+      return '<div class="vcard ' + (c ? c.medal : "bronze") + '"><b>' + esc(x.emoji) + " " + esc(x.label) + "</b><span>" + esc(x.mean) + "</span><span>" + (c ? med[c.medal] + (c.isNew ? " · new in your vault" : "") + (maths && c.lvl ? " · Level " + c.lvl : "") : "🥉") + "</span></div>";
     }).join("") + '</div><p class="tiny" style="margin-top:10px">These " + (maths ? "skills" : "words") + " will come back in your warm-ups. Get them right to turn them silver and gold!</p></div>'
       : '<div class="card"><h3>Today you learned</h3><p>' + esc(S.q.rules.map(r => r.t).join(" · ")) + "</p></div>") +
     (S.created.length ? '<div class="card"><h3>' + (maths ? "Your shop result" : "Your sentence") + '</h3><p class="story">' + esc(S.created[S.created.length - 1].text) + '</p><button class="btn alt" id="hs">🔊 Hear it</button></div>' : "") +

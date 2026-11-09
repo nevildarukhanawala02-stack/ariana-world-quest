@@ -42,7 +42,7 @@ async function load() {
     '<p class="tiny" style="margin-top:10px">' + d.words.length + ' words and skills collected (' + counts.gold + ' gold, ' + counts.silver + ' silver, ' + counts.bronze + ' bronze)</p></div>' +
 
     '<div class="card"><h3>Words and skills that need another look</h3>' + (struggling.length
-      ? '<div class="scroll"><table><tr><th>Word or skill</th><th>Right</th><th>Wrong</th><th>Next review</th></tr>' + struggling.map(w => "<tr><td>" + ico(w.subject) + " <b>" + esc(w.label || w.w) + "</b><br><span class=\"small\">" + esc(w.mean || "") + "</span></td><td>" + w.right + '</td><td class="warn">' + w.wrong + "</td><td>" + esc(w.due) + "</td></tr>").join("") + "</table></div>"
+      ? '<div class="scroll"><table><tr><th>Word or skill</th><th>Right</th><th>Wrong</th><th>Next review</th></tr>' + struggling.map(w => "<tr><td>" + ico(w.subject) + " <b>" + esc(w.label || w.w) + "</b>" + (w.subject === "maths" ? " <span class=\"small\">Level " + (w.lvl || 1) + "</span>" : "") + "<br><span class=\"small\">" + esc(w.mean || "") + "</span></td><td>" + w.right + '</td><td class="warn">' + w.wrong + "</td><td>" + esc(w.due) + "</td></tr>").join("") + "</table></div>"
       : '<p class="tiny">Nothing yet. Words show up here when she gets them wrong more often than right.</p>') + "</div>" +
 
     '<div class="card"><h3>Recent sessions</h3>' + (d.sessions.length
@@ -60,7 +60,7 @@ async function load() {
       ? '<p class="tiny">Claude writes a fresh quest in the same format. It takes about a minute. The new quest goes to the end of the map.</p><label class="small" for="gk">Type</label><select class="field" id="gk"><option value="words">Word quest (4 new words)</option><option value="grammar">Grammar quest</option></select>' +
         '<label class="small" for="gt" style="display:block;margin-top:10px">Theme or setting (optional)</label><input class="field" id="gt" maxlength="120" placeholder="e.g. a trip to the zoo, Holi, a rainy cricket match">' +
         '<label class="small" for="gf" style="display:block;margin-top:10px">Anything to focus on (optional)</label><input class="field" id="gf" maxlength="200" placeholder="e.g. words about feelings, or the past tense">' +
-        '<div class="actions" style="margin-top:12px"><button class="btn" id="gen">Create quest</button></div><p class="tiny" id="genMsg" aria-live="polite"></p>'
+        (d.weak.english.length ? '<p style="margin:8px 0 0"><button class="mini" id="useWeak">Use her tricky words</button></p>' : '') + '<div class="actions" style="margin-top:12px"><button class="btn" id="gen">Create quest</button></div><p class="tiny" id="genMsg" aria-live="polite"></p>'
       : '<p class="tiny">Add ANTHROPIC_API_KEY on the server to create new quests with Claude.</p>') + "</div>" +
 
     '<div class="card"><h3>Settings</h3><p class="tiny">Live Hooty: ' + (d.ai.enabled ? "on (" + esc(d.ai.coachModel) + ", up to " + d.ai.coachLimit + " questions a day)" : "off") + '<br>Data folder: ' + esc(d.dataDir) + '</p>' +
@@ -70,6 +70,8 @@ async function load() {
     if (!confirm("Remove this quest?")) return;
     try { await api("/api/parent/quest/" + b.dataset.del, { method: "DELETE" }); toast("Removed"); load(); } catch (e) { toast(e.message); }
   }; });
+  const uw = $("#useWeak");
+  if (uw) uw.onclick = () => { $("#gk").value = "words"; $("#gf").value = "She finds these words tricky: " + d.weak.english.join(", ") + ". Choose new words of a similar kind, in everyday situations, so those ideas get more practice."; };
   const gen = $("#gen");
   if (gen) gen.onclick = async () => {
     gen.disabled = true; $("#genMsg").textContent = "Writing your quest… this takes up to a minute.";

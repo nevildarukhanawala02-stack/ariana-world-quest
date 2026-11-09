@@ -97,12 +97,56 @@ const srv = app.listen(0, async () => {
     r = await call("/api/state?today=2026-11-17&subject=maths");
     ok(r.body.dueWords.some(w => w.w === "mulq"), "shaky maths skill is due next day");
 
+    // ---- adaptive: maths levels ----
+    const mday = (d, sid, quest, extra) => call("/api/session", { method: "POST", body: JSON.stringify(Object.assign({ sid, subject: "maths", quest, today: d, seconds: 600, stars: 5, wrong: 0, hints: 0 }, extra)) });
+    r = await call("/api/state?today=2026-11-16&subject=maths");
+    ok(r.body.words.every(w => w.lvl === 1), "new maths skills start at level 1");
+    await mday("2026-11-17", "lv1", 1, { replay: true, wordRes: { add2: { right: 1, wrong: 0 } } });
+    r = await call("/api/state?today=2026-11-17&subject=maths");
+    ok(r.body.words.find(w => w.w === "add2").lvl === 2, "two clean days raise a skill to level 2");
+    await mday("2026-11-17", "lv1b", 1, { replay: true, wordRes: { add2: { right: 1, wrong: 0 } } });
+    r = await call("/api/state?today=2026-11-17&subject=maths");
+    ok(r.body.words.find(w => w.w === "add2").lvl === 2, "same-day replays cannot farm levels");
+    await mday("2026-11-18", "lv2", 1, { replay: true, wordRes: { add2: { right: 0, wrong: 2 } } });
+    r = await call("/api/state?today=2026-11-18&subject=maths");
+    ok(r.body.words.find(w => w.w === "add2").lvl === 1 && r.body.words.find(w => w.w === "add2").box === 1, "a rough day lowers the level and resets the box");
+
+    // ---- adaptive: practice quests ----
+    r = await call("/api/state?today=2026-11-20&subject=english");
+    ok(r.body.practice.available === false, "no practice offered when only a couple of words are shaky");
+    r = await call("/api/practice?subject=english");
+    ok(r.status === 404, "practice endpoint says nothing to practise yet");
+    const q5 = C.base.find(q => q.id === 5), wr5 = {};
+    q5.words.forEach(x => { wr5[x.w] = { right: 1, wrong: 2 }; });
+    r = await call("/api/session", { method: "POST", body: JSON.stringify({ sid: "e5", quest: 5, today: "2026-11-20", seconds: 700, stars: 5, wrong: 8, hints: 3, wordRes: wr5 }) });
+    r = await call("/api/state?today=2026-11-20&subject=english");
+    ok(r.body.practice.available && r.body.practice.labels.length === 4, "practice appears once three or more words are shaky");
+    const doneBefore = r.body.overview.english.done, nextBefore = r.body.next.id, starsBefore2 = r.body.stars;
+    r = await call("/api/practice?subject=english");
+    ok(r.status === 200 && r.body.practice === true && r.body.words.length === 4 && r.body.words.every(w => w.quiz && w.silly && w.build && w.gap), "english practice quest has full word data");
+    const pw = r.body.words.map(w => w.w);
+    const wrP = {}; pw.forEach(w => { wrP[w] = { right: 1, wrong: 0 }; });
+    r = await call("/api/session", { method: "POST", body: JSON.stringify({ sid: "p1", practice: true, quest: 0, today: "2026-11-21", seconds: 500, stars: 9, wrong: 0, hints: 0, wordRes: wrP }) });
+    ok(r.status === 200 && r.body.newBadges.includes("practice") && !r.body.newBadges.some(b => b.startsWith("quest:")), "practice session awards the practice badge, not a quest badge");
+    r = await call("/api/state?today=2026-11-21&subject=english");
+    ok(r.body.next.id === nextBefore && r.body.overview.english.done === doneBefore && r.body.stars === starsBefore2 + 9, "practice keeps the path as is, adds stars, and is not counted as a quest");
+    ok(pw.every(w => r.body.words.find(x => x.w === w).box >= 2), "practised words move up a review box");
+    r = await call("/api/parent", {}, { "x-parent": "pp" });
+    ok(r.body.sessions.some(x => x.title === "Practice Time") && Array.isArray(r.body.weak.english), "parent area lists practice sessions and weak words");
+
+    r = await call("/api/practice?subject=maths");
+    ok(r.status === 404, "maths practice not offered with only one shaky skill");
+    const wrM = {}; MM.quests.find(q => q.id === 2).skills.forEach(id => { wrM[id] = { right: 0, wrong: 2 }; });
+    await mday("2026-11-21", "m2", 2, { wordRes: wrM });
+    r = await call("/api/practice?subject=maths");
+    ok(r.status === 200 && r.body.kind === "maths" && r.body.skills.length === 4 && r.body.units.length === 4 && r.body.create && r.body.warm.length === 4, "maths practice quest is built from shaky skills");
+
     await call("/api/session/rate", { method: "POST", body: JSON.stringify({ sid: "s4", ratings: { play: "😍" } }) });
 
     ok((await call("/api/parent")).status === 401, "parent area needs the passcode");
     r = await call("/api/parent", {}, { "x-parent": "pp" });
     ok(r.status === 200 && r.body.sessions.length >= 4 && r.body.sentences.length >= 1, "parent dashboard returns sessions and sentences");
-    ok(r.body.subjects.maths.sessions === 1 && r.body.subjects.maths.stars === 12 && r.body.quests.some(q => q.subject === "maths") && r.body.words.some(w => w.subject === "maths"), "parent dashboard covers maths too");
+    ok(r.body.subjects.maths.sessions >= 1 && r.body.subjects.maths.stars >= 12 && r.body.quests.some(q => q.subject === "maths") && r.body.words.some(w => w.subject === "maths"), "parent dashboard covers maths too");
     ok(r.body.sessions.some(x => x.ratings && x.ratings.play === "😍"), "ratings are saved");
 
     r = await call("/api/coach", { method: "POST", body: JSON.stringify({ question: "what does eager mean?" }) });
