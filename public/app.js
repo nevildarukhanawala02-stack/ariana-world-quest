@@ -263,8 +263,8 @@ function top() {
       "<br>⭐ " + o.stars + " · 🔥 " + o.streak.count + "-day streak · " + esc(o.rank.icon + " " + o.rank.title);
   };
   stage.innerHTML =
-    '<button class="subj eng" id="sEng"><span class="big" aria-hidden="true">📚</span><span><b>Love English</b><small>' + sub("english") + '</small></span></button>' +
-    '<button class="subj mth" id="sMath"><span class="big" aria-hidden="true">💰</span><span><b>Money Maths</b><small>' + sub("maths") + '</small></span></button>' +
+    '<div class="subjgrid"><button class="subj eng" id="sEng"><span class="big" aria-hidden="true">📚</span><span><b>Love English</b><small>' + sub("english") + '</small></span></button>' +
+    '<button class="subj mth" id="sMath"><span class="big" aria-hidden="true">💰</span><span><b>Money Maths</b><small>' + sub("maths") + '</small></span></button></div>' +
     '<p class="tiny center"><a href="/parent">Parent area</a></p>';
   $("#sEng").onclick = () => enter("english");
   $("#sMath").onclick = () => enter("maths");
@@ -923,7 +923,7 @@ async function report() {
     (words.length ? '<div class="card"><h3>Today you learned</h3><div class="vgrid">' + words.map(x => {
       const c = changed.filter(z => z.w === x.id)[0];
       return '<div class="vcard ' + (c ? c.medal : "bronze") + '"><b>' + esc(x.emoji) + " " + esc(x.label) + "</b><span>" + esc(x.mean) + "</span><span>" + (c ? med[c.medal] + (c.isNew ? " · new in your vault" : "") + (maths && c.lvl ? " · Level " + c.lvl : "") : "🥉") + "</span></div>";
-    }).join("") + '</div><p class="tiny" style="margin-top:10px">These " + (maths ? "skills" : "words") + " will come back in your warm-ups. Get them right to turn them silver and gold!</p></div>'
+    }).join("") + '</div><p class="tiny" style="margin-top:10px">These ' + (maths ? "skills" : "words") + ' will come back in your warm-ups. Get them right to turn them silver and gold!</p></div>'
       : '<div class="card"><h3>Today you learned</h3><p>' + esc(S.q.rules.map(r => r.t).join(" · ")) + "</p></div>") +
     (S.created.length ? '<div class="card"><h3>' + (maths ? "Your shop result" : "Your sentence") + '</h3><p class="story">' + esc(S.created[S.created.length - 1].text) + '</p><button class="btn alt" id="hs">🔊 Hear it</button></div>' : "") +
     '<div class="card"><p>' + esc(st.rank.icon) + " <b>" + esc(st.rank.title) + "</b>" + (st.rank.next ? " · " + st.rank.next.need + " more badge" + (st.rank.next.need > 1 ? "s" : "") + " to become a " + esc(st.rank.next.title) : "") + "</p></div>" +

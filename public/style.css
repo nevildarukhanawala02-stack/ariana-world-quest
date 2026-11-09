@@ -26,6 +26,7 @@ h2{font-size:28px;line-height:1.15;margin:0 0 6px;font-weight:800}
 h3{font-size:22px;line-height:1.2;margin:2px 0 8px;font-weight:800}
 p{margin:0 0 10px}
 a{color:var(--blue);font-weight:700}
+.center a{display:inline-block;padding:12px 16px}
 .small{font-size:14px;color:var(--muted);font-weight:700}
 .tiny{font-size:15px;color:var(--muted);margin:0 0 8px}
 button{font:inherit;color:inherit;cursor:pointer}
@@ -33,9 +34,10 @@ button:focus-visible,.gap:focus-visible,input:focus-visible,select:focus-visible
 
 /* header */
 #top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.brand{font-weight:800;font-size:20px;line-height:1.05;flex:1}
+.brand{font-weight:800;font-size:clamp(16px,4.8vw,20px);line-height:1.05;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .pill{background:var(--card);border:2px solid var(--line);border-radius:999px;padding:3px 12px;font-weight:800;font-size:15px;white-space:nowrap;color:var(--ink)}
-button.pill{padding:3px 10px}
+button.pill{padding:3px 10px;min-height:44px;min-width:44px}
+.pill{display:inline-flex;align-items:center;justify-content:center}
 #track{list-style:none;display:flex;gap:6px;padding:0;margin:0 0 8px}
 #track li{flex:1;text-align:center;font-size:13px;font-weight:800;padding:6px 2px;border-radius:10px;background:var(--card);border:2px solid var(--line);color:var(--muted)}
 #track li.now{background:var(--gold);color:#241B5A;border-color:var(--gold)}
@@ -52,7 +54,7 @@ button.pill{padding:3px 10px}
 .bubble::before{content:"";position:absolute;left:-9px;bottom:20px;border:8px solid transparent;border-left:0;border-right-color:var(--line)}
 .bubble p{margin:0;font-weight:700}
 .tools{display:flex;gap:8px;margin-top:8px;justify-content:flex-end;flex-wrap:wrap}
-.mini{font-weight:800;font-size:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:4px 12px}
+.mini{font-weight:800;font-size:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:4px 14px;min-height:44px}
 
 /* cards + buttons */
 .card{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
@@ -82,7 +84,7 @@ button.pill{padding:3px 10px}
 /* meet */
 .scene{width:112px;height:112px;border-radius:50%;background:var(--sel-bg);border:3px solid var(--line);display:grid;place-items:center;font-size:58px;margin:6px auto 12px}
 .story{font-size:20px;line-height:1.55;margin-bottom:12px}
-.hl{font:inherit;font-weight:800;background:var(--gold);color:#241B5A;border:0;border-radius:8px;padding:0 8px;animation:glow 1.5s ease-in-out infinite}
+.hl{min-height:40px;font:inherit;font-weight:800;background:var(--gold);color:#241B5A;border:0;border-radius:8px;padding:0 8px;animation:glow 1.5s ease-in-out infinite}
 .meanbox{background:var(--sel-bg);border-radius:14px;padding:10px 12px;font-weight:700;margin-bottom:12px}
 .resp{font-size:28px;font-weight:800;letter-spacing:.02em;color:var(--blue);line-height:1.2}
 .bigword{font-size:44px;font-weight:800;line-height:1.1;margin:6px 0}
@@ -92,7 +94,7 @@ button.pill{padding:3px 10px}
 
 /* drag + build */
 .sent{font-size:19px;line-height:2.3;margin:0 0 4px}
-.gap{display:inline-block;min-width:116px;height:1.7em;vertical-align:middle;border-bottom:3px dashed var(--blue);background:var(--sel-bg);border-radius:8px 8px 0 0;text-align:center;font-weight:800;line-height:1.7em;padding:0 8px}
+.gap{display:inline-block;min-width:116px;height:44px;vertical-align:middle;border-bottom:3px dashed var(--blue);background:var(--sel-bg);border-radius:8px 8px 0 0;text-align:center;font-weight:800;line-height:44px;padding:0 8px}
 .gap.filled{border-bottom:3px solid var(--teal);background:var(--good-bg)}
 .bank,.chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 .chip{padding:10px 16px;border-radius:14px;border:0;background:var(--gold);color:#241B5A;font-weight:800;font-size:18px;box-shadow:0 4px 0 var(--gold-deep);touch-action:none;user-select:none;-webkit-user-select:none}
@@ -192,7 +194,77 @@ th{color:var(--muted);font-size:13px}
 @keyframes hop{0%,100%{transform:translateY(0)}40%{transform:translateY(-10px)}}
 @keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(255,180,46,.7)}50%{box-shadow:0 0 0 8px rgba(255,180,46,0)}}
 @keyframes fly{to{transform:translate(var(--dx),var(--dy)) rotate(var(--r));opacity:0}}
-@media (min-width:700px){#app{padding-top:24px}.pairs{gap:16px}}
+/* ---------- bigger screens: tablets and desktops ---------- */
+@media (hover:hover){
+  .btn:hover{filter:brightness(1.06)}
+  .opt:hover,.tile:hover,.node:hover:not(:disabled),.menu button:hover,.shopitem:hover:not(:disabled),.pad button:hover,.vcard:hover,.chip.pick:hover{border-color:var(--blue)}
+  .subj:hover{filter:brightness(1.06)}
+  .mini:hover,.pill:hover{border-color:var(--blue)}
+}
+/* tablets (iPad portrait and up): everything a little larger, still one column */
+@media (min-width:700px){
+  #app{max-width:780px;padding-top:24px}
+  .wrap{max-width:780px}
+  body{font-size:19px}
+  h2{font-size:34px}h3{font-size:26px}
+  #mascot{width:104px;height:104px}
+  .brand{font-size:24px}
+  .pill{font-size:17px}
+  .btn{min-height:60px;font-size:22px;padding:8px 28px}
+  .btn.alt{font-size:19px}
+  .card{padding:24px;border-radius:26px}
+  .opt,.tile{padding:16px 20px;font-size:20px;min-height:60px}
+  .opt b{width:38px;height:38px}
+  .chip{font-size:21px;padding:13px 20px}
+  .sent{font-size:23px}
+  .story{font-size:24px}
+  .scene{width:140px;height:140px;font-size:72px}
+  .resp{font-size:32px}
+  .bigword{font-size:54px}
+  .sayline{font-size:28px}
+  .rulet{font-size:30px}
+  .pad{max-width:420px}
+  .pad button{min-height:74px;font-size:32px}
+  .answer{font-size:50px;min-height:78px}
+  .shopgrid{grid-template-columns:repeat(3,1fr);gap:14px}
+  .shopitem span{font-size:38px}.shopitem b{font-size:16px}
+  .vgrid{grid-template-columns:repeat(2,1fr);gap:14px}
+  .bgrid{grid-template-columns:repeat(4,1fr)}
+  #track li{font-size:16px;padding:9px 2px}
+  .pairs{gap:18px}
+  .stats>div{font-size:16px}.stats b{font-size:30px}
+  .subj .big{font-size:64px}.subj b{font-size:32px}.subj small{font-size:17px}
+}
+/* wide or sideways screens (iPad landscape, laptops, desktops, phones held sideways):
+   the coach sits in a left column and the activity gets the whole right side */
+@media (min-width:900px), (orientation:landscape) and (max-height:560px){
+  #app{max-width:1120px;display:grid;grid-template-columns:minmax(210px,290px) minmax(0,1fr);column-gap:28px;align-items:start}
+  #top,#questChrome{grid-column:1 / -1}
+  #coach{grid-column:1;flex-direction:column;align-items:stretch;gap:12px;position:sticky;top:12px;margin-bottom:0}
+  #stage{grid-column:2;min-width:0}
+  #mascot{align-self:center}
+  .bubble::before{display:none}
+  .subjgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .subjgrid .subj{flex-direction:column;text-align:center;justify-content:center;margin-bottom:0;padding:26px 18px;min-height:250px}
+  .wrap{max-width:980px}
+}
+/* phones held sideways are short: keep things compact so the activity stays in view */
+@media (orientation:landscape) and (max-height:560px){
+  #app{padding:6px 14px 20px;column-gap:18px;grid-template-columns:minmax(190px,240px) minmax(0,1fr)}
+  #top{margin-bottom:6px}
+  .bar{margin-bottom:8px}
+  #track{margin-bottom:6px}
+  #mascot{width:64px;height:64px}
+  .bubble{padding:8px 10px}
+  .bubble p{font-size:15px}
+  .tools{margin-top:6px}
+  .mini{min-height:40px}
+  h3{font-size:20px}
+  .card{padding:12px}
+  .answer{min-height:52px;font-size:30px;margin:4px 0 8px}
+  .pad{grid-template-columns:repeat(5,1fr);max-width:none}
+  .pad button{min-height:50px;font-size:22px}
+}
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
   .fx{display:none}
