@@ -36,7 +36,17 @@ async function load() {
   const counts = { bronze: 0, silver: 0, gold: 0 }; d.words.forEach(w => counts[w.medal]++);
   const ico = sb => (sb === "maths" ? "💰" : "📚");
 
-  root.innerHTML =
+  const pr = d.progress, bar = (a, b) => '<div class="bar" style="margin:6px 0 8px"><i style="width:' + Math.round(100 * a / Math.max(1, b)) + '%"></i></div>';
+  const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+  const CATN = { history: "📜 History", geography: "🌍 Geography", didyouknow: "💡 Did you know" };
+  const dc = pr.discoveries, pct = dc.asked ? Math.round(100 * dc.firstTryRight / dc.asked) : null;
+  const progressCard = '<div class="card"><h3>Lessons finished</h3>' +
+    ['english', 'maths'].map(sb => { const p = pr[sb]; return '<div class="qa"><b>' + (sb === "maths" ? "💰 Money Maths" : "📚 Love English") + '</b><br>' + '<b>' + p.questsDone + ' of ' + p.questsTotal + '</b> lessons finished' + bar(p.questsDone, p.questsTotal) +
+      'This week: ' + plural(p.daysThisWeek, "day") + ', ' + p.minutesThisWeek + ' min<br>All time: ' + plural(p.sessions, "session") + ', ' + p.minutes + ' min' + (p.practice ? ' (' + p.practice + ' practice)' : '') + '<br>Last played: ' + esc(p.lastPlayed ? new Date(p.lastPlayed + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : 'not yet') + '</div>'; }).join('') +
+    '<p style="margin:12px 0 4px"><b>🔭 Discoveries in Love English</b></p>' +
+    Object.keys(CATN).map(k => '<div>' + CATN[k] + ': <b>' + dc.cats[k].done + ' of ' + dc.cats[k].total + '</b>' + bar(dc.cats[k].done, dc.cats[k].total) + '</div>').join('') +
+    '<p class="tiny" style="margin:6px 0 0">Discovery questions right on the first try: ' + (pct === null ? 'none yet' : dc.firstTryRight + ' of ' + dc.asked + ' (' + pct + '%)') + '</p></div>';
+  root.innerHTML = progressCard +
     '<div class="card"><h3>' + esc(d.name) + ' at a glance</h3><p class="tiny">Each subject keeps its own stars, streak, rank and badges. Average session: ' + d.avgMinutes + ' min.</p>' +
     ['english', 'maths'].map(sb => { const x = d.subjects[sb]; return '<div class="qa"><b>' + (sb === "maths" ? "💰 Money Maths" : "📚 Love English") + '</b><br>' + x.sessions + ' sessions · ⭐ ' + x.stars + ' · 🔥 ' + x.streak.count + '-day streak (best ' + x.streak.best + ', ' + x.streak.freezes + ' freeze' + (x.streak.freezes === 1 ? '' : 's') + ' left) · ' + esc(x.rank.icon + ' ' + x.rank.title) + ' · ' + x.badges + ' badges</div>'; }).join('') +
     '<p class="tiny" style="margin-top:10px">' + d.words.length + ' words and skills collected (' + counts.gold + ' gold, ' + counts.silver + ' silver, ' + counts.bronze + ' bronze)</p></div>' +
@@ -58,6 +68,7 @@ async function load() {
 
     '<div class="card"><h3>Add a new quest</h3>' + (d.ai.enabled
       ? '<p class="tiny">Claude writes a fresh quest in the same format. It takes about a minute. The new quest goes to the end of the map.</p><label class="small" for="gk">Type</label><select class="field" id="gk"><option value="words">Word quest (4 new words)</option><option value="grammar">Grammar quest</option></select>' +
+        '<label class="small" for="gd" style="display:block;margin-top:10px">Discovery to include</label><select class="field" id="gd"><option value="none">None</option><option value="history">History</option><option value="geography">Geography</option><option value="didyouknow">Did you know?</option></select>' +
         '<label class="small" for="gt" style="display:block;margin-top:10px">Theme or setting (optional)</label><input class="field" id="gt" maxlength="120" placeholder="e.g. a trip to the zoo, Holi, a rainy cricket match">' +
         '<label class="small" for="gf" style="display:block;margin-top:10px">Anything to focus on (optional)</label><input class="field" id="gf" maxlength="200" placeholder="e.g. words about feelings, or the past tense">' +
         (d.weak.english.length ? '<p style="margin:8px 0 0"><button class="mini" id="useWeak">Use her tricky words</button></p>' : '') + '<div class="actions" style="margin-top:12px"><button class="btn" id="gen">Create quest</button></div><p class="tiny" id="genMsg" aria-live="polite"></p>'
@@ -76,7 +87,7 @@ async function load() {
   if (gen) gen.onclick = async () => {
     gen.disabled = true; $("#genMsg").textContent = "Writing your quest… this takes up to a minute.";
     try {
-      const r = await api("/api/parent/generate", { method: "POST", body: JSON.stringify({ kind: $("#gk").value, theme: $("#gt").value, focus: $("#gf").value }) });
+      const r = await api("/api/parent/generate", { method: "POST", body: JSON.stringify({ kind: $("#gk").value, theme: $("#gt").value, focus: $("#gf").value, discover: $("#gd").value }) });
       toast("Added: " + r.quest.title); load();
     } catch (e) { $("#genMsg").textContent = e.message; gen.disabled = false; }
   };

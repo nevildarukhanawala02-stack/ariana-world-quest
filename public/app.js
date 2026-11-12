@@ -299,12 +299,13 @@ function home() {
   stage.innerHTML = main + prac +
     '<div class="card"><div class="stats"><div><b>⭐ ' + st.stars + '</b>stars</div><div><b>🔥 ' + st.streak.count + '</b>day streak</div><div><b>' + esc(st.rank.icon) + '</b>' + esc(st.rank.title) + '</div></div>' +
     (st.rank.next ? '<p class="tiny" style="margin:10px 0 0">' + st.rank.next.need + " more badge" + (st.rank.next.need > 1 ? "s" : "") + " to become a " + esc(st.rank.next.title) + "</p>" : "") + '</div>' +
-    '<div class="menu"><button id="mMap"><span>🗺️</span>Quest map</button><button id="mVault"><span>' + (SUBJECT === "maths" ? "🧮" : "📚") + '</span>' + (SUBJECT === "maths" ? "Skill vault" : "Word vault") + '</button><button id="mBadges"><span>🏅</span>Badges</button></div>' +
+    '<div class="menu' + (SUBJECT === "maths" ? "" : " four") + '"><button id="mMap"><span>🗺️</span>Quest map</button><button id="mVault"><span>' + (SUBJECT === "maths" ? "🧮" : "📚") + '</span>' + (SUBJECT === "maths" ? "Skill vault" : "Word vault") + '</button>' + (SUBJECT === "maths" ? "" : '<button id="mDisc"><span>📖</span>Discovery book</button>') + '<button id="mBadges"><span>🏅</span>Badges</button></div>' +
     '<p class="tiny center"><button class="mini" id="toTop">← Switch subject</button></p>';
   if (n) $("#go").onclick = () => startQuest(n.id, false);
   else $("#map2").onclick = questMap;
   if ($("#prac")) $("#prac").onclick = startPractice;
   $("#mMap").onclick = questMap; $("#mVault").onclick = vault; $("#mBadges").onclick = () => badgesScreen(home);
+  if ($("#mDisc")) $("#mDisc").onclick = discoveryBook;
   $("#toTop").onclick = top;
 }
 
@@ -344,6 +345,30 @@ function vault() {
     const w = words.filter(x => x.w === b.dataset.w)[0];
     b.onclick = () => maths ? speak(w.label + ". " + w.mean) : speak(w.w, 0.7, true);
   });
+}
+
+function discoveryBook() {
+  const st = APP.state, tot = st.discoveryTotals, found = st.discoveries;
+  const totalAll = tot.history + tot.geography + tot.didyouknow;
+  const body = '<p class="tiny">' + found.length + " of " + totalAll + " discoveries found. Finish a quest to unlock its discovery.</p>" +
+    Object.keys(CATS).map(k => {
+      const mine = found.filter(d => d.cat === k), left = tot[k] - mine.length;
+      return '<h3>' + CATS[k].icon + " " + CATS[k].name + " (" + mine.length + " of " + tot[k] + ")</h3>" +
+        mine.map(d => '<button class="node done" data-q="' + d.quest + '"><span class="e">' + esc(d.emoji) + '</span><span>' + esc(d.title) + "<small>" + esc(d.place) + "</small></span></button>").join("") +
+        (left > 0 ? '<div class="node lock" aria-hidden="true"><span class="e">❓</span><span>' + left + " mystery discover" + (left > 1 ? "ies" : "y") + "<small>Keep playing to find them</small></span></div>" : "");
+    }).join("");
+  subScreen("Discovery book", body, found.length ? "Look at everything you’ve discovered! Tap one to read it again." : "Your book is empty. Finish a quest and your first discovery will appear!");
+  [].forEach.call(stage.querySelectorAll("button.node"), b => { b.onclick = () => readDiscovery(+b.dataset.q); });
+}
+function readDiscovery(qid) {
+  const d = APP.state.discoveries.filter(x => x.quest === qid)[0]; if (!d) return;
+  const c = CATS[d.cat], r = readingHTML(d, []);
+  endSession(); chrome(false); window.scrollTo(0, 0);
+  stage.innerHTML = '<button class="btn alt back" id="back">Back</button><div class="card"><div class="small">' + c.icon + " " + esc(c.name) + '</div><div class="scene" aria-hidden="true">' + esc(d.emoji) + '</div><h3 class="center">' + esc(d.title) + "</h3>" +
+    (d.place ? '<p class="tiny center">📍 ' + esc(d.place) + "</p>" : "") + r.html + '<div class="meanbox">✨ ' + esc(d.fact) + '</div><div class="row"><button class="btn alt" id="dh">🔊 Hear it</button></div></div>';
+  say("Here’s that discovery again!", []);
+  $("#back").onclick = discoveryBook;
+  $("#dh").onclick = () => speak(d.text.join(" ") + " " + d.fact);
 }
 
 function badgesScreen(back) {
@@ -439,7 +464,7 @@ function meetMaths() {
     S.now = "Learning: " + u.title;
     say(i === 0 ? S.q.intro : "Here’s the next skill.", []);
     $("#hx").onclick = () => speak(spoken(u.text + " For example: " + u.ex));
-    $("#nx").onclick = () => { i++; if (i < U.length) show(); else go(2); };
+    $("#nx").onclick = () => { i++; if (i < U.length) show(); else afterMeet(); };
   }
   show();
 }
@@ -458,7 +483,7 @@ function meetWords() {
     $("#hl").onclick = () => { $("#mean").innerHTML = "<b>" + esc(x.w) + "</b> means <b>" + esc(x.mean) + "</b>."; speak(x.w, 0.65, true); };
     $("#hw").onclick = () => speak(x.w, 0.65, true);
     $("#hs").onclick = () => speak(x.line);
-    $("#nx").onclick = () => { i++; if (i < W.length) show(); else go(2); };
+    $("#nx").onclick = () => { i++; if (i < W.length) show(); else afterMeet(); };
   }
   show();
 }
@@ -473,9 +498,47 @@ function meetGrammar() {
     S.now = "Reading the rule: " + r.t;
     say(i === 0 ? S.q.intro : i === R.length - 1 ? "Memory trick: " + S.q.tip : "Got it? Here’s the next one.", []);
     $("#hx").onclick = () => speak(r.ex);
-    $("#nx").onclick = () => { i++; if (i < R.length) show(); else go(2); };
+    $("#nx").onclick = () => { i++; if (i < R.length) show(); else afterMeet(); };
   }
   show();
+}
+
+/* ---------- 2b. discovery: a short History, Geography or Did-you-know reading ---------- */
+const CATS = {
+  history:    { icon: "📜", name: "History" },
+  geography:  { icon: "🌍", name: "Geography" },
+  didyouknow: { icon: "💡", name: "Did you know?" }
+};
+function afterMeet() { if (S.q.discover) discovery(); else go(2); }
+// highlight the quest's words inside a reading, so she meets them again in real sentences
+function readingHTML(d, words) {
+  const found = [];
+  const paras = d.text.map(t => {
+    let h = esc(t);
+    (words || []).forEach(w => {
+      const re = new RegExp("\\b(" + w + ")\\b", "gi");
+      if (re.test(t) && found.indexOf(w) < 0) found.push(w);
+      h = h.replace(re, '<mark class="wd">$1</mark>');
+    });
+    return '<p class="story read">' + h + "</p>";
+  }).join("");
+  return { html: paras, found };
+}
+function discovery() {
+  const d = S.q.discover, c = CATS[d.cat] || CATS.didyouknow;
+  const r = readingHTML(d, (S.q.words || []).map(w => w.w));
+  S.ctx = "Reading a " + c.name + " discovery: " + d.title; S.now = d.title;
+  stage.innerHTML = '<div class="card"><div class="small">' + c.icon + " " + esc(c.name) + ' · Discovery</div><div class="scene" aria-hidden="true">' + esc(d.emoji) + '</div><h3 class="center">' + esc(d.title) + "</h3>" +
+    (d.place ? '<p class="tiny center">📍 ' + esc(d.place) + "</p>" : "") + r.html +
+    '<div class="meanbox">✨ ' + esc(d.fact) + "</div>" +
+    (r.found.length ? '<p class="tiny">🔎 Spot today’s words: <b>' + r.found.map(esc).join(", ") + "</b></p>" : "") +
+    '<div class="row"><button class="btn alt" id="dh">🔊 Hear it</button></div></div><div class="actions"><button class="btn" id="dgo">Check what you learned</button></div>';
+  say("Time for a discovery! Read it, or tap Hear it. Then I’ll ask two questions.", []);
+  $("#dh").onclick = () => speak(d.text.join(" ") + " " + d.fact);
+  $("#dgo").onclick = () => {
+    const items = d.quiz.map(x => ({ q: x.q, opts: x.opts, ans: x.ans, why: x.why, hints: ["Read the discovery again. Tap Hear it on the last screen if you want to listen."], remind: "Think back to what you read." }));
+    quiz("Discovery check", items, "discover", () => { if (S.log.discover.first === items.length) badge("explorer"); go(2); });
+  };
 }
 
 /* ---------- 3. play ---------- */

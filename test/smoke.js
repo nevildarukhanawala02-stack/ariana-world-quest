@@ -97,6 +97,19 @@ const srv = app.listen(0, async () => {
     r = await call("/api/state?today=2026-11-17&subject=maths");
     ok(r.body.dueWords.some(w => w.w === "mulq"), "shaky maths skill is due next day");
 
+    // ---- discoveries (History, Geography, Did you know) ----
+    r = await call("/api/state?today=2026-11-16&subject=english");
+    ok(r.body.discoveries.length >= 3 && r.body.discoveries.every(d => d.title && d.text.length >= 3 && d.fact), "english state lists the discoveries she has unlocked, with their text");
+    ok(r.body.discoveryTotals.history === 4 && r.body.discoveryTotals.geography === 4 && r.body.discoveryTotals.didyouknow === 3, "discovery totals: 4 history, 4 geography, 3 did-you-know");
+    ok(r.body.badges.includes("disc3") && r.body.badgeCatalog.explorer && r.body.badgeCatalog.disc7, "three discoveries earns the 3 Discoveries badge; explorer badge exists");
+    const mst = await call("/api/state?today=2026-11-16&subject=maths");
+    ok(mst.body.discoveries.length === 0 && !mst.body.badgeCatalog.disc3 && !mst.body.badgeCatalog.explorer, "maths has no discoveries and none of those badges");
+    const bad = JSON.parse(JSON.stringify(C.base[0])); bad.discover.quiz[0].ans = 7;
+    ok(C.validateQuest(bad).length > 0, "a malformed discovery is rejected by validation");
+    r = await call("/api/parent", {}, { "x-parent": "pp" });
+    ok(r.body.progress.english.questsDone >= 3 && r.body.progress.english.questsTotal === 11 && r.body.progress.maths.questsTotal === 8 && r.body.progress.discoveries.cats.history.total === 4, "parent progress shows lessons finished and discovery totals");
+    ok(typeof r.body.progress.discoveries.asked === "number" && r.body.progress.english.minutes >= 0 && "lastPlayed" in r.body.progress.english, "parent progress includes minutes, last played and discovery accuracy");
+
     // ---- adaptive: maths levels ----
     const mday = (d, sid, quest, extra) => call("/api/session", { method: "POST", body: JSON.stringify(Object.assign({ sid, subject: "maths", quest, today: d, seconds: 600, stars: 5, wrong: 0, hints: 0 }, extra)) });
     r = await call("/api/state?today=2026-11-16&subject=maths");

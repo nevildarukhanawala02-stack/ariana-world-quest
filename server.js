@@ -101,9 +101,10 @@ const SKILL = {
   calc:    { icon: "🧮", name: "Number Cruncher",  desc: "Type in every answer right first try in a quest" },
   shopkeeper: { icon: "🛍️", name: "Shopkeeper",     desc: "Finish a shop challenge" },
   ace:     { icon: "💎", name: "Perfect Quest",    desc: "Finish a quest with no wrong answers" },
-  practice:{ icon: "💪", name: "Practice Pro",     desc: "Finish a practice quest on your tricky ones" }
+  practice:{ icon: "💪", name: "Practice Pro",     desc: "Finish a practice quest on your tricky ones" },
+  explorer:{ icon: "🔭", name: "Curious Explorer", desc: "Answer both discovery questions right first try" }
 };
-const SKILL_FOR = { english: ["warm", "drag", "eyes", "sound", "story", "builder", "ace", "practice"], maths: ["warm", "drag", "eyes", "calc", "shopkeeper", "ace", "practice"] };
+const SKILL_FOR = { english: ["warm", "drag", "eyes", "sound", "story", "builder", "ace", "practice", "explorer"], maths: ["warm", "drag", "eyes", "calc", "shopkeeper", "ace", "practice"] };
 const STREAKS = {
   streak3:  { icon: "🔥", name: "3-Day Streak",  desc: "Play 3 days in a row" },
   streak7:  { icon: "⚡", name: "7-Day Streak",  desc: "Play 7 days in a row" },
@@ -115,6 +116,8 @@ const VAULT = {
     words10:  { icon: "📚", name: "10 Words",      desc: "Collect 10 words in your vault" },
     words25:  { icon: "📖", name: "25 Words",      desc: "Collect 25 words in your vault" },
     words50:  { icon: "🏛️", name: "50 Words",      desc: "Collect 50 words in your vault" },
+    disc3:    { icon: "📖", name: "3 Discoveries", desc: "Find 3 discoveries in your Discovery Book" },
+    disc7:    { icon: "🌍", name: "7 Discoveries", desc: "Find 7 discoveries in your Discovery Book" },
     gold1:    { icon: "🥇", name: "First Gold Word", desc: "Master a word so well it turns gold" }
   },
   maths: {
@@ -209,7 +212,14 @@ function publicState(st, today, sb) {
   const dueWords = words.filter(w => w.isDue && w.mean).sort((a, b) => (a.due < b.due ? -1 : 1)).slice(0, 8);
   const next = quests.find(q => q.id >= o.currentQuest) || null;
   const used = (st.coach.counts && st.coach.counts[today]) || 0;
+  const discoveries = [], discoveryTotals = { history: 0, geography: 0, didyouknow: 0 };
+  if (sb === "english") quests.forEach(q => {
+    if (!q.discover) return;
+    discoveryTotals[q.discover.cat]++;
+    if (done.has(q.id)) discoveries.push({ quest: q.id, cat: q.discover.cat, title: q.discover.title, emoji: q.discover.emoji, place: q.discover.place || "", text: q.discover.text, fact: q.discover.fact });
+  });
   return {
+    discoveries, discoveryTotals,
     subject: sb,
     name: st.profile.name,
     stars: o.stars,
@@ -341,6 +351,12 @@ app.post("/api/session", wrap(async (req, res) => {
     const nu = Object.keys(units).length;
     (sb === "maths" ? [[8, "skills8"], [20, "skills20"], [32, "skills32"]] : [[10, "words10"], [25, "words25"], [50, "words50"]]).forEach(([n, id]) => { if (nu >= n) give(id); });
     if (Object.values(units).some(v => v.box >= 5)) give("gold1");
+    if (sb === "english") {                                  // discoveries found = distinct finished quests that carry one
+      const have = new Set(st.completed.filter(c => recSubj(c) === "english" && !c.practice).map(c => c.quest));
+      if (!practice) have.add(quest.id);
+      const nd = [...have].filter(id => { const q = quests.find(x => x.id === id); return q && q.discover; }).length;
+      [[3, "disc3"], [7, "disc7"]].forEach(([n, id]) => { if (nd >= n) give(id); });
+    }
 
     (Array.isArray(b.created) ? b.created : []).slice(0, 6).forEach(c => {
       if (c && c.text) st.sentences.push({ word: clip(c.word, 30), text: clip(c.text, 160), date: today, quest: quest.id });
@@ -407,6 +423,26 @@ app.get("/api/parent", parentOnly, wrap(async (req, res) => {
   res.json({
     name: st.profile.name,
     subjects: SUBJECTS.reduce((acc, sb) => { const o = bag(st, sb); acc[sb] = { stars: o.stars, badges: o.badges.length, streak: streakView(o, today), rank: rankFor(o.badges.length, sb), sessions: st.completed.filter(c => recSubj(c) === sb).length }; return acc; }, {}),
+    progress: (() => {
+      const out = {};
+      SUBJECTS.forEach(sb => {
+        const qs = questsOf(st, sb), rec = st.completed.filter(c => recSubj(c) === sb), real = rec.filter(c => !c.practice);
+        const week = rec.filter(c => { const d = dayDiff(c.date, today); return d >= 0 && d <= 6; });
+        out[sb] = {
+          questsDone: new Set(real.map(c => c.quest)).size, questsTotal: qs.length, sessions: rec.length, practice: rec.length - real.length,
+          minutes: Math.round(rec.reduce((a, c) => a + c.seconds, 0) / 60),
+          lastPlayed: rec.length ? rec[rec.length - 1].date : null,
+          daysThisWeek: new Set(week.map(c => c.date)).size, minutesThisWeek: Math.round(week.reduce((a, c) => a + c.seconds, 0) / 60)
+        };
+      });
+      const eq = questsOf(st, "english"), doneIds = new Set(st.completed.filter(c => recSubj(c) === "english" && !c.practice).map(c => c.quest));
+      const cats = { history: { done: 0, total: 0 }, geography: { done: 0, total: 0 }, didyouknow: { done: 0, total: 0 } };
+      eq.forEach(q => { if (q.discover) { cats[q.discover.cat].total++; if (doneIds.has(q.id)) cats[q.discover.cat].done++; } });
+      let right = 0, asked = 0;
+      st.completed.forEach(c => { if (recSubj(c) === "english" && !c.practice && c.log && c.log.discover) { right += c.log.discover.first || 0; asked += c.log.discover.total || 0; } });
+      out.discoveries = { cats, firstTryRight: right, asked };
+      return out;
+    })(),
     sessionsTotal: st.completed.length,
     avgMinutes: real.length ? Math.round(real.reduce((a, c) => a + c.seconds, 0) / real.length / 60 * 10) / 10 : 0,
     words, sessions,
@@ -429,11 +465,12 @@ app.post("/api/parent/generate", parentOnly, wrap(async (req, res) => {
   const kind = req.body && req.body.kind === "grammar" ? "grammar" : "words";
   const theme = clip(req.body && req.body.theme, 120);
   const focus = clip(req.body && req.body.focus, 200);
+  const discoverCat = kind === "words" || kind === "grammar" ? (C.CATS.includes(req.body && req.body.discover) ? req.body.discover : null) : null;
   const st = await store.read();
   const quests = C.all(st);
   const taught = Object.keys(C.wordIndex(quests));
   const example = quests.find(x => x.kind === kind);
-  const q = await AI.generateQuest({ kind, theme, focus, taught, example, validate: C.validateQuest });
+  const q = await AI.generateQuest({ kind, theme, focus, taught, example, validate: C.validateQuest, discoverCat });
   await store.update(s => {
     q.id = Math.max(0, ...C.all(s).map(x => x.id)) + 1;
     s.generated.push(q);
